@@ -3,7 +3,7 @@ let project_folder = 'dist';
 
 let fs = require('fs');
 
-
+//! об'єкт із шляхами до разних файлів
 let path = {
     build: {
         html: project_folder + '/',
@@ -13,23 +13,24 @@ let path = {
         fonts: project_folder + '/fonts/',
     },
     src: {
-        html: source_folder + '/*.html', 
-        css: source_folder + '/scss/style.scss', 
+        html: [source_folder + '/*.html', '!' + source_folder + '/_*.html'], //**читаємо всі html файли, але не копіюємо ! _name.html файли в dist  */
+        css: source_folder + '/scss/style.scss', //! для компіляції лише цього файлу, який міститиме інші файли стилів
         js: source_folder + '/js/script.js',
-        img: source_folder + '/img/**/*.{png, jpg, svg, gif, ico, webp}', 
-        fonts: source_folder + '/fonts/*.{ttf, woff, woff2, eot}',
+        img: source_folder + '/img/**/*.{png,jpg,svg,gif,ico,webp}', //! ми слухаємо всі підпапки в img з вказаним списком розширинь
+        fonts: source_folder + '/fonts/*.{ttf,woff,woff2,eot}',
     },
+    //! об'єкт із шляхами до файлів, зміни в яких необхідно постійно моніторити
     watch: {
-        html: source_folder + '/**/*.html',
+        html: source_folder + '/**/*.html', //! моніторимо всі файли html
         css: source_folder + '/scss/**/*.scss',
         js: source_folder + '/js/**/*.js',
-        img: source_folder + '/img/**/*.{png, jpg, svg, gif, ico, webp}',
+        img: source_folder + '/img/**/*.{png,jpg,svg,gif,ico,webp}',
     },
-  
+    //! об'єкт для видалення папки при кожному запуску gulp
     clean: './' + project_folder + '/'
 }
 
-
+//***підключення плагінів для роботи з ними через змінні */
 let { src, dest } = require('gulp'),
 gulp = require('gulp'),
 browsersync = require('browser-sync').create(),
@@ -45,18 +46,9 @@ imagemin = require('gulp-imagemin'),
 webp = require('gulp-webp'),
 webphtml = require('gulp-webp-html'),
 webpcss = require('gulp-webpcss'),
-svgSprite = require('gulp-svg-sprite'),
-ttf2woff = require('gulp-ttf2woff'),
-ttf2woff2 = require('gulp-ttf2woff2'),
+// svgSprite = require('gulp-svg-sprite'),
 htmlmin = require('gulp-htmlmin'),
-concat = require('gulp-concat'),
-cache = require('gulp-cache'),
-imageminPngquant = require('imagemin-pngquant'),
-imageminZopfli = require('imagemin-zopfli'),
-imageminMozjpeg = require('imagemin-mozjpeg'), //need to run 'brew install libpng'
-imageminGiflossy = require('imagemin-giflossy'),
-imageminification = require('imagemin'),
-imageminWebp = require('imagemin-webp');
+cache = require('gulp-cache')
 
 
 
@@ -64,55 +56,56 @@ imageminWebp = require('imagemin-webp');
 
 
 
+//! функція оновлення браузера
 function browserSync(params) {
     browsersync.init({
         server: {
-            baseDir: './' + project_folder + '/' 
+            baseDir: './' + project_folder + '/' //! базова серверна папка
         },
         port: 3000,
-        notify: false
-    })
+        notify: false //! скасовує табличку з написом при активації цієї функції (необов'язковий параметр)
+    });
 }
 
-
+//**Метод для оновлення браузера при зміні html і компіляцції багатьох html файлів в один */
 function html() {
 
-        src(path.src.html) 
-        .pipe(webphtml()) 
+    return   gulp.src(path.src.html) //***шлях до корінної папки */
+        .pipe(webphtml()) //**метод для полегшення піключення webp картинок в документ(не обов'якова без використання webp) */
         .pipe(htmlmin({ collapseWhitespace: true }))
-        .pipe(dest(path.build.html)) 
-
+        .pipe(dest(path.build.html)) //*** перемістили файли із папки src в dist*/ 
+        .pipe(browsersync.reload({stream: true}));
 }
-
+//**метод для обробки css файлів */
 function css() {
     return src(path.src.css)
-        .pipe( 
+        .pipe( //! задаємо налаштування scss файлу перед відправкою до сервера
             scss({
-                outputStyle: 'expanded' 
+                outputStyle: 'expanded' //! тип зжимання файлу
             }).on('error', scss.logError)
         )
         .pipe(
-            group_media() 
+            group_media() //! групує запити із різних файлів стилів в один (оптимізація)
         )
         .pipe(
-            autoprefixer({ 
+            autoprefixer({ //! задає підтримку коду вказаною межею варесій усіх браузерів
                 
                 overrideBrowserslist: ['last 5 versions', '>1%', 'ie 8', 'ie 7'],
                 cascade: true
             }))
-        .pipe(webpcss()) 
-        .pipe(dest(path.build.css)) 
+        .pipe(webpcss()) //**метод для компіляції картинок в форматі webp в css коді без спец конструкцій */
+        .pipe(dest(path.build.css)) //**Спершу вигружаємо не зжатий файл */
         .pipe(clean_css())
         .pipe(
             rename({
                 extname: '.min.css'
             })
         )
-        .pipe(dest(path.build.css)) 
+        .pipe(dest(path.build.css)) //**вигружаємо зжатий файл */
         .pipe(browsersync.reload({stream: true}));
 }
 
-
+//**метод для збору і налаштування багатьох js файлів в один */
 function js() {
     return src(path.src.js)
         .pipe(fileinclude())
@@ -128,11 +121,10 @@ function js() {
 }
 
 
-
-
+//**Метод для створення icons */
 function images() {
     return src(path.src.img)
-        .pipe( 
+        .pipe( //!робота із картинками в форматі webp
             webp({
                 quality: 70,
                 method: 3,
@@ -140,8 +132,8 @@ function images() {
                 lossless: true
             })
         )
-        .pipe(dest(path.build.img)) 
-        .pipe(src(path.src.img)) 
+        .pipe(dest(path.build.img)) //!вигрузка фото в форматі webp
+        .pipe(src(path.src.img)) //! картинку не перейменувати в min, тому треба прописати ще раз дану команду, що працював код нижче
         .pipe(cache(imagemin({
                 progressive: true,
                 svgoPlugins: [{
@@ -153,12 +145,30 @@ function images() {
         .pipe(dest(path.build.img))
         .pipe(browsersync.reload({stream: true}))
 }
-
+//**Чиска кешу */
 gulp.task('clear', function(){
     return cache.clearAll();
 });
+//**задача, яку ми викликатимесо окремо в терміналі при потребі використання спрайтів */
+// gulp.task('svgSprite', function () {
+//     return gulp.src([source_folder + '/iconsprite/*.svg']) //**шлях до спрайтів */
+//         .pipe(svgSprite({
+//             mode: {
+//                 stack: {
+//                     sprite: '../icons/icons.svg', //! назва збірки спрайтів, яка буде поміщена на серверну папку img в такій ієрархії
+//                 }
+//             },
+//         }))
+//         .pipe(dest(path.build.img));
+// });
+//**метод webp img */
 
 
+//**метод для обробки і компіляції шрифтів */
+function fonts(params) {
+    return gulp.src(path.src.fonts)
+    .pipe(dest(path.build.fonts));
+}
 
 //**метод для підключення шрифтів в файл стилів працює з медіа файлом підключеним в основному файлі стилів*/
 
@@ -197,16 +207,15 @@ function watchFile() {
 function clean(params) {
     return del(path.clean);
 }
-
-let build = gulp.series(clean, gulp.parallel(html, css, images, fonts), fontsStyle, js); 
-let watch = gulp.parallel(build, watchFile, browserSync); 
+//! змушую gulp виконувати цю функцію
+let build = gulp.series(clean, gulp.parallel(html, css, images, fonts), js, fontsStyle); //! задачі працюють по черзі, послідовно
+let watch = gulp.parallel(build, watchFile, browserSync); //! задачі працюють паралельно
 
 
 
 //*** */ змушую gulp подружитись із змінними(кожна нова змінна повинна сюди вписуватись для оптимізованішої роботи)
 
 exports.fontsStyle = fontsStyle;
-exports.libs = libs;
 exports.fonts = fonts;
 exports.images = images;
 exports.js = js;
@@ -214,4 +223,5 @@ exports.css = css;
 exports.html = html;
 exports.build = build;
 exports.watch = watch;
+//! метод gulp.parallel() виконується не лише при використанні змінної, а й по дефолту
 exports.default = watch;
